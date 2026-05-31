@@ -6,6 +6,7 @@ from dbus.mainloop.glib import DBusGMainLoop
 from gi.repository import GLib
 import sqlite3
 import subprocess
+import time
 
 LAST_APP = None
 LAST_TITLE = None
@@ -14,7 +15,7 @@ DB_PATH = os.path.expanduser("~/.local/share/timetracker/usage.db")
 SCRIPT_PATH = os.path.expanduser("/home/awaheed/Code/timetracker/tracker.js")
 SCRIPT_NAME = "window-tracker"
 
-def load_script():
+def load_script() -> bool:
     try:
         subprocess.run(
             ["qdbus", "org.kde.KWin", "/Scripting", "unloadScript", SCRIPT_NAME],
@@ -37,8 +38,10 @@ def load_script():
                 stderr=subprocess.DEVNULL
             )
             print(f"Successfully loaded and hooked KWin script ID: {script_id}", flush=True)
+            return True
         else:
             print(f"KWin returned an unexpected script signature: '{script_id}'", flush=True)
+            return False
 
     except Exception as e:
         print(f"Failed to start KWin Script: {e}", flush=True)
@@ -126,8 +129,16 @@ system_bus.add_signal_receiver(
     bus_name="org.freedesktop.login1"
 )
 
-# Boot the compositor hooks up
-load_script()
+
+for i in range(10):
+    if load_script():
+        break
+    
+    print(f"KWin not ready yet (attempt {attempt+1}/10)")
+    time.sleep(5)
+
+else:
+    print("Failed to hook KWin after 10 attempts")
 
 print("Listening for KWin active window transactions and sleep/shutdown events...", flush=True)
 try:
