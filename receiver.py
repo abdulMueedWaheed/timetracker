@@ -45,6 +45,9 @@ def load_script() -> bool:
 
     except Exception as e:
         print(f"Failed to start KWin Script: {e}", flush=True)
+        print("stdout:", repr(res.stdout))
+        print("stderr:", repr(res.stderr))
+        print("returncode:", res.returncode)
 
 def init_db():
     os.makedirs(os.path.dirname(DB_PATH), exist_ok=True)
@@ -130,11 +133,11 @@ system_bus.add_signal_receiver(
 )
 
 
-for i in range(10):
+for i in range(10): #Just try 10 times
     if load_script():
         break
     
-    print(f"KWin not ready yet (attempt {attempt+1}/10)")
+    print(f"KWin not ready yet (attempt {i + 1}/10)")
     time.sleep(5)
 
 else:

@@ -2,9 +2,7 @@
 
 import os
 import sqlite3
-from datetime import datetime
 import argparse
-import datetime
 from datetime import timedelta, datetime
 
 DB_PATH = os.path.expanduser("~/.local/share/timetracker/usage.db")
@@ -48,16 +46,24 @@ def show_stats(start: int, end: int):
             duration = (datetime.now() - current_time).total_seconds()
 
             totals[app] = totals.get(app, 0) + duration
-
+        
+        total = 0
         for app, seconds in sorted(
                 totals.items(),
                 key=lambda x: x[1],
                 reverse=True):
+            if app in ['System', 'org.kde.plasmashell', 'plasmashell']:
+                continue
             hours = int(seconds // 3600)
             minutes = int((seconds % 3600) // 60)
             secs = int(seconds % 60)
-
+            total += seconds
             print(f"{app}: {hours}h {minutes}m {secs}s")
+        
+        hours = int(total // 3600)
+        minutes = int((total % 3600) // 60)
+        secs = int(total % 60)
+        print(f"Total Time Spent: {hours}h {minutes}m {secs}s")
 
 
 if args.command == "stats":
