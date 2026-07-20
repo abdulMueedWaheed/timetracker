@@ -1,0 +1,22 @@
+{
+    "KPlugin": {
+        "Id": "com.github.abdulMueedWhaeed.timetracker",
+        "Name": "Time Tracker",
+        "Description": "Show Screen Time to user.",
+        "Icon": "com.github.abdulMueedWhaeed.timetracker",
+        "Category": "Monitoring",
+        "Authors": [
+            {
+                "Name": "Abdul Mueed Waheed",
+                "Email": "awaheed.bscs23seecs@seecs.edu.pk"
+            }
+        ],
+        "License": "MIT",
+        "Version": "1.0",
+        "Website": "https://github.com/abdulMueedWhaeed/timetracker",
+        "BugReportUrl": "https://github.com/abdulMueedWhaeed/timetracker/issues"
+    },
+    "KPackageStructure": "Plasma/Applet",
+    "X-Plasma-API-Minimum-Version": "6.0",
+    "X-Plasma-HasConfigurationInterface": true
+}
