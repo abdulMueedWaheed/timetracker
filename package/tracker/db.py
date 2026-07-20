@@ -1,10 +1,8 @@
 #!/usr/bin/env python3
 
-import json
 import os
 import sqlite3
-from datetime import datetime, timedelta
-
+from datetime import datetime
 from env import DB_PATH
 
 
@@ -80,20 +78,10 @@ def get_stats(start_dt: datetime, end_dt: datetime | None = None) -> dict[str, f
     return {app: seconds for app, seconds in totals.items() if app not in ignored_apps}
 
 
-def get_stats_for_range(start_date: str, end_date: str) -> dict[str, object]:
-    start_dt = datetime.strptime(start_date, "%Y-%m-%d")
-    end_dt = datetime.strptime(end_date, "%Y-%m-%d")
-    
-    stats = get_stats(start_dt, end_dt + timedelta(days=1))
-    items = [{"app": app, "seconds": int(seconds)} for app, seconds in sorted(stats.items(), key=lambda item: item[1], reverse=True)] # type: ignore
-    
+def get_stats_for_range(start_dt: datetime, end_dt: datetime) -> dict[str, object]:
+    stats = get_stats(start_dt, end_dt)
+    items = [{"app": app, "seconds": int(seconds)} for app, seconds in sorted(stats.items(), key=lambda item: item[1], reverse=True)]  # type: ignore
     return {"total_seconds": int(sum(stats.values())), "items": items}
-
-
-
-def get_stats_payload(start_date: str, end_date: str) -> str:
-    return json.dumps(get_stats_for_range(start_date, end_date))
-
 
 
 if __name__ == "__main__":

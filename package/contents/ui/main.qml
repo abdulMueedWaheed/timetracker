@@ -2,6 +2,8 @@ import QtQuick
 import QtQuick.Layouts
 import QtCharts
 import QtCore
+import QtObject
+import QtDBus
 import org.kde.plasma.plasmoid
 import org.kde.plasma.components 3.0 as PC3
 
@@ -10,11 +12,22 @@ PlasmoidItem {
     height: 500
     width: 500
 
-    Timer {
-        interval: 10 * 1000
-        running: true
-        repeat: true
-        onTriggered: root.loadData()
+    QtObject {
+        id: dataLoader
+
+        property var data: null
+
+        Component.onCompleted: {
+            interface = Qt.createQmlObject(
+                "import QtDBus; \
+                DBusInterface { \
+                service: 'org.kde.plasma.time-tracker'; \
+                path: '/org/kde/plasma/time-tracker'; \
+                interface: 'org.kde.plasma.time-tracker' \
+                }", 
+                
+                dataLoader);
+        }
     }
 
     preferredRepresentation: fullRepresentation

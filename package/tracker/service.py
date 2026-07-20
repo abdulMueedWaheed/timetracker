@@ -3,22 +3,47 @@ import dbus # type: ignore
 import dbus.service # type: ignore
 from dbus.mainloop.glib import DBusGMainLoop # type: ignore
 from gi.repository import GLib # type: ignore
+import json
 import subprocess
 import time
+from datetime import datetime, timedelta
 
-from db import log_event, get_stats_payload
+from db import log_event, get_stats_for_range, init_db
 from env import SCRIPT_PATH, SCRIPT_NAME
 
 last_app: str = ""
 last_title: str = ""
 
-def load_script() -> bool:
+def is_script_loaded() -> bool:
+    try:
+        res = subprocess.run(
+            ["qdbus", "org.kde.KWin", "/Scripting", "org.kde.kwin.Scripting.isScriptLoaded", SCRIPT_NAME],
+            capture_output=True,
+            text=True
+        )
+        return res.stdout.strip() == "true"
+    except Exception as e:
+        print(f"Error occurred while checking if script is loaded: {e}", flush=True)
+        return False
+
+
+def unload_script() -> None:
     try:
         subprocess.run(
-            ["qdbus", "org.kde.KWin", "/Scripting", "unloadScript", SCRIPT_NAME],
+            ["qdbus", "org.kde.KWin", f"/Scripting", "unloadScript", SCRIPT_NAME],
             stdout=subprocess.DEVNULL,
             stderr=subprocess.DEVNULL
         )
+
+        print(f"Successfully unloaded KWin script: {SCRIPT_NAME}", flush=True)
+    except Exception as e:
+        print(f"Failed to unload KWin Script: {e}", flush=True)
+
+
+def load_script() -> bool:
+    try:
+        if is_script_loaded():
+            unload_script()    
         
         # Load the JS script file
         res = subprocess.run(
@@ -61,12 +86,27 @@ def handle_sleep_change(going_to_sleep): # type: ignore
         log_event("resume", "System", "Machine woke up from sleep state")
         load_script()
 
+
 def handle_shutdown_change(going_to_shutdown): # type: ignore
     if going_to_shutdown:
         log_event("shutdown", "System", "Machine is shutting down or restarting")
 
+
 # --- INITIALIZATION SEQUENCING ---
 from db import init_db
+
+
+def get_stats_json(start_date: str, end_date: str) -> str:
+    """Convert date strings to datetime and return stats as JSON for D-Bus."""
+    try:
+        start_dt = datetime.strptime(start_date, "%Y-%m-%d")
+        end_dt = datetime.strptime(end_date, "%Y-%m-%d") + timedelta(days=1)
+        stats = get_stats_for_range(start_dt, end_dt)
+        return json.dumps(stats)
+    except Exception as exc:
+        print(f"get_stats_json failed: {exc!r}", flush=True)
+        return json.dumps({"total_seconds": 0, "items": [], "error": str(exc)})
+
 
 
 def main() -> None:
@@ -94,11 +134,14 @@ def main() -> None:
             log_event("focus_changed", app_class, window_title)
             return ""
 
+
         @dbus.service.method("com.custom.TimeTracker", in_signature="ss", out_signature="s") # type: ignore
         def GetStatsForRange(self, start_date: str, end_date: str):
-            return get_stats_payload(start_date, end_date)
+            return get_stats_json(start_date, end_date)
+
 
     listener = WindowListener(bus_name, "/com/custom/TimeTracker") # type: ignore
+
 
     system_bus.add_signal_receiver( # type: ignore
         handle_sleep_change,
@@ -124,9 +167,11 @@ def main() -> None:
         print("Failed to hook KWin after 10 attempts")
 
     print("Listening for KWin active window transactions and sleep/shutdown events...", flush=True)
+
     try:
         GLib.MainLoop().run() # type: ignore
     except KeyboardInterrupt:
+        unload_script()
         print("\nStopping...")
 
 
