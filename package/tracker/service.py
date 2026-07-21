@@ -1,20 +1,52 @@
 #!/usr/bin/env python3
-import dbus # type: ignore
-import dbus.service # type: ignore
-from dbus.mainloop.glib import DBusGMainLoop # type: ignore
+from dbus_next.constants import BusType
+from dbus_next.glib.message_bus import MessageBus
+from dbus_next.service import ServiceInterface, method
 from gi.repository import GLib # type: ignore
+
 import json
 import subprocess
 import time
 from datetime import datetime, timedelta
 
-from db import log_event, get_stats_for_range, init_db
-from env import SCRIPT_PATH, SCRIPT_NAME
+from db import logEvent, getStatsRange, initDB
+from env import SCRIPT_PATH, SCRIPT_NAME, BUS_NAME, OBJECT_PATH, INTERFACE_NAME
 
 last_app: str = ""
 last_title: str = ""
 
-def is_script_loaded() -> bool:
+# -------------------------------------
+# Main Interface Class
+# -------------------------------------
+class TimeTrackerInterface(ServiceInterface):
+    def __init__(self) -> None:
+        super().__init__(INTERFACE_NAME)
+
+    @method()
+    def ActiveWindowChanged(self, app_class: "s", window_title: "s") -> None:
+        global last_app, last_title
+
+        print(f"ActiveWindowChanged called: {app_class} / {window_title}", flush=True)
+
+        if app_class == last_app and window_title == last_title:
+            print("Ignoring duplicate", flush=True)
+            return
+
+        last_app = app_class
+        last_title = window_title
+
+        print(f"Logging event for {app_class}", flush=True)
+        logEvent("focus_changed", app_class, window_title)
+
+    @method()
+    def GetStatsForRange(self, start_date: "s", end_date: "s") -> "s":
+        return get_stats_json(start_date, end_date)
+    
+
+# -------------------------------------
+# Load, Unload, and Check if script is loaded
+# -------------------------------------
+def isScriptLoaded() -> bool:
     try:
         res = subprocess.run(
             ["qdbus", "org.kde.KWin", "/Scripting", "org.kde.kwin.Scripting.isScriptLoaded", SCRIPT_NAME],
@@ -27,7 +59,7 @@ def is_script_loaded() -> bool:
         return False
 
 
-def unload_script() -> None:
+def unloadScript() -> None:
     try:
         subprocess.run(
             ["qdbus", "org.kde.KWin", f"/Scripting", "unloadScript", SCRIPT_NAME],
@@ -40,10 +72,10 @@ def unload_script() -> None:
         print(f"Failed to unload KWin Script: {e}", flush=True)
 
 
-def load_script() -> bool:
+def loadScript() -> bool:
     try:
-        if is_script_loaded():
-            unload_script()    
+        if isScriptLoaded():
+            unloadScript()    
         
         # Load the JS script file
         res = subprocess.run(
@@ -75,25 +107,27 @@ def load_script() -> bool:
         return False
 
 
-# --- SYSTEMD POWER SIGNAL HANDLERS ---
-def handle_sleep_change(going_to_sleep): # type: ignore
+# -------------------------------------
+# SYSTEMD POWER SIGNAL HANDLERS
+# -------------------------------------
+def handleSleepChange(going_to_sleep): # type: ignore
     global last_app, last_title
     if going_to_sleep:
-        log_event("suspend", "System", "Machine entering sleep/suspend state")
+        logEvent("suspend", "System", "Machine entering sleep/suspend state")
     else:
         last_app = ""
         last_title = ""
-        log_event("resume", "System", "Machine woke up from sleep state")
-        load_script()
+        logEvent("resume", "System", "Machine woke up from sleep state")
+        loadScript()
 
 
-def handle_shutdown_change(going_to_shutdown): # type: ignore
+def handleShutdownChange(going_to_shutdown): # type: ignore
     if going_to_shutdown:
-        log_event("shutdown", "System", "Machine is shutting down or restarting")
+        logEvent("shutdown", "System", "Machine is shutting down or restarting")
 
 
 # --- INITIALIZATION SEQUENCING ---
-from db import init_db
+from db import initDB
 
 
 def get_stats_json(start_date: str, end_date: str) -> str:
@@ -101,7 +135,7 @@ def get_stats_json(start_date: str, end_date: str) -> str:
     try:
         start_dt = datetime.strptime(start_date, "%Y-%m-%d")
         end_dt = datetime.strptime(end_date, "%Y-%m-%d") + timedelta(days=1)
-        stats = get_stats_for_range(start_dt, end_dt)
+        stats = getStatsRange(start_dt, end_dt)
         return json.dumps(stats)
     except Exception as exc:
         print(f"get_stats_json failed: {exc!r}", flush=True)
@@ -110,55 +144,33 @@ def get_stats_json(start_date: str, end_date: str) -> str:
 
 
 def main() -> None:
-    init_db()
-    DBusGMainLoop(set_as_default=True)
+    initDB()
 
-    bus_connection = dbus.SessionBus()
-    bus_name = dbus.service.BusName("com.custom.TimeTracker", bus=bus_connection) # type: ignore
-    system_bus = dbus.SystemBus()
+    session_bus = MessageBus(bus_type=BusType.SESSION).connect_sync()
+    session_bus.request_name_sync(BUS_NAME)
+    session_bus.export(OBJECT_PATH, TimeTrackerInterface())
 
-    class WindowListener(dbus.service.Object): # type: ignore
-        @dbus.service.method("com.custom.TimeTracker", in_signature="ss") # type: ignore
-        def ActiveWindowChanged(self, app_class: str, window_title: str):
-            global last_app, last_title
-            print(f"ActiveWindowChanged called: {app_class} / {window_title}", flush=True)
-
-            if app_class == last_app and window_title == last_title:
-                print(f"Ignoring duplicate", flush=True)
-                return ""
-
-            last_app = app_class
-            last_title = window_title
-
-            print(f"Logging event for {app_class}", flush=True)
-            log_event("focus_changed", app_class, window_title)
-            return ""
+    system_bus = MessageBus(bus_type=BusType.SYSTEM).connect_sync()
 
 
-        @dbus.service.method("com.custom.TimeTracker", in_signature="ss", out_signature="s") # type: ignore
-        def GetStatsForRange(self, start_date: str, end_date: str):
-            return get_stats_json(start_date, end_date)
-
-
-    listener = WindowListener(bus_name, "/com/custom/TimeTracker") # type: ignore
-
-
-    system_bus.add_signal_receiver( # type: ignore
-        handle_sleep_change,
-        signal_name="PrepareForSleep",
-        dbus_interface="org.freedesktop.login1.Manager",
-        bus_name="org.freedesktop.login1",
+    login1_intro = system_bus.introspect_sync(
+        "org.freedesktop.login1",
+        "/org/freedesktop/login1",
     )
 
-    system_bus.add_signal_receiver( # type: ignore
-        handle_shutdown_change,
-        signal_name="PrepareForShutdown",
-        dbus_interface="org.freedesktop.login1.Manager",
-        bus_name="org.freedesktop.login1",
+    login1_object = system_bus.get_proxy_object(
+        "org.freedesktop.login1",
+        "/org/freedesktop/login1",
+        login1_intro,
     )
+
+    login1_manager = login1_object.get_interface("org.freedesktop.login1.Manager")
+    login1_manager.on_prepare_for_sleep(handleSleepChange)
+    login1_manager.on_prepare_for_shutdown(handleShutdownChange)
+
 
     for i in range(10):
-        if load_script():
+        if loadScript():
             break
 
         print(f"KWin not ready yet (attempt {i + 1}/10)")
@@ -171,7 +183,7 @@ def main() -> None:
     try:
         GLib.MainLoop().run() # type: ignore
     except KeyboardInterrupt:
-        unload_script()
+        unloadScript()
         print("\nStopping...")
 
 

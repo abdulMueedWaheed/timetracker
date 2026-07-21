@@ -6,7 +6,7 @@ from datetime import datetime
 from env import DB_PATH
 
 
-def init_db() -> None:
+def initDB() -> None:
     os.makedirs(os.path.dirname(DB_PATH), exist_ok=True)
     with sqlite3.connect(DB_PATH) as conn:
         conn.execute(
@@ -23,8 +23,8 @@ def init_db() -> None:
         conn.commit()
 
 
-def log_event(event_type: str, app_class: str, window_title: str) -> None:
-    init_db()
+def logEvent(event_type: str, app_class: str, window_title: str) -> None:
+    initDB()
     try:
         with sqlite3.connect(DB_PATH) as conn:
             conn.execute(
@@ -37,8 +37,8 @@ def log_event(event_type: str, app_class: str, window_title: str) -> None:
         print(f"log_event failed: {exc!r}", flush=True)
 
 
-def get_stats(start_dt: datetime, end_dt: datetime | None = None) -> dict[str, float]:
-    init_db()
+def getStats(start_dt: datetime, end_dt: datetime | None = None) -> dict[str, float]:
+    initDB()
     if end_dt is None:
         end_dt = datetime.now()
 
@@ -78,8 +78,8 @@ def get_stats(start_dt: datetime, end_dt: datetime | None = None) -> dict[str, f
     return {app: seconds for app, seconds in totals.items() if app not in ignored_apps}
 
 
-def get_stats_for_range(start_dt: datetime, end_dt: datetime) -> dict[str, object]:
-    stats = get_stats(start_dt, end_dt)
+def getStatsRange(start_dt: datetime, end_dt: datetime) -> dict[str, object]:
+    stats = getStats(start_dt, end_dt)
     items = [{"app": app, "seconds": int(seconds)} for app, seconds in sorted(stats.items(), key=lambda item: item[1], reverse=True)]  # type: ignore
     return {"total_seconds": int(sum(stats.values())), "items": items}
 
