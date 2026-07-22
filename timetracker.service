@@ -1,0 +1,14 @@
+[Unit]
+Description=Desktop Time Tracker
+After=graphical-session.target
+
+[Service]
+Type=simple
+WorkingDirectory=/home/awaheed/Code/time-tracker/package/tracker
+ExecStart=/home/awaheed/Code/time-tracker/package/tracker/service.py
+
+Restart=on-failure
+RestartSec=3
+
+[Install]
+WantedBy=default.target

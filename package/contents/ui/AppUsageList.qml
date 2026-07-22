@@ -8,12 +8,15 @@ Item {
 
     property var items: []
     property int totalSeconds: 0
+    
     property var colorProvider: function(index) {
         return Kirigami.Theme.highlightColor;
     }
+    
     property var formatDuration: function(seconds) {
         return seconds + "s";
     }
+    
     readonly property int rowHeight: Kirigami.Units.gridUnit * 2.2
 
     implicitHeight: Math.min(listView.contentHeight, Kirigami.Units.gridUnit * 12)
@@ -32,6 +35,7 @@ Item {
             height: root.rowHeight
 
             readonly property int percent: root.totalSeconds > 0 ? Math.round(modelData.seconds * 100 / root.totalSeconds) : 0
+            readonly property color itemColor: root.colorProvider(modelData.app)
 
             Rectangle {
                 anchors.fill: parent
@@ -64,7 +68,7 @@ Item {
                         Layout.preferredWidth: Kirigami.Units.gridUnit * 0.55
                         Layout.preferredHeight: Kirigami.Units.gridUnit * 0.55
                         radius: width / 2
-                        color: root.colorProvider(index)
+                        color: itemColor
                     }
 
                     PC3.Label {
@@ -100,7 +104,7 @@ Item {
                         width: parent.width * (percent / 100)
                         height: parent.height
                         radius: height / 2
-                        color: root.colorProvider(modelData.app)
+                        color: itemColor
                         opacity: 1.0
 
                         Behavior on width {

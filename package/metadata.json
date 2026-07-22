@@ -3,7 +3,7 @@
         "Id": "com.github.abdulMueedWhaeed.timetracker",
         "Name": "Time Tracker",
         "Description": "Show Screen Time to user.",
-        "Icon": "com.github.abdulMueedWhaeed.timetracker",
+        "Icon": "d-tracker",
         "Category": "Monitoring",
         "Authors": [
             {

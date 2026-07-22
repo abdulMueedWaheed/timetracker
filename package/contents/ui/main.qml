@@ -6,9 +6,11 @@ import org.kde.kirigami as Kirigami
 import org.kde.plasma.components as PC3
 import org.kde.plasma.plasma5support as P5Support
 import org.kde.plasma.plasmoid
+import org.kde.plasma.core as PlasmaCore
 
 PlasmoidItem {
     id: root
+    Plasmoid.backgroundHints: PlasmaCore.Types.DefaultBackground | PlasmaCore.Types.TranslucentBackground
 
     // ------------------------------------
     //  vars
@@ -154,23 +156,35 @@ PlasmoidItem {
     }
 
 
-    preferredRepresentation: fullRepresentation
+    preferredRepresentation: Plasmoid.compactRepresentation
 
     // ------------------------------------
     //  Compact Representation
     // ------------------------------------
-    compactRepresentation: RowLayout {
-        spacing: Kirigami.Units.smallSpacing
+    compactRepresentation: MouseArea {
+        id: compactRoot
+        implicitWidth: compactLayout.implicitWidth
+        implicitHeight: compactLayout.implicitHeight
+        Layout.preferredWidth: compactLayout.implicitWidth
+        Layout.preferredHeight: compactLayout.implicitHeight
 
-        Kirigami.Icon {
-            source: "player-time"
-            Layout.preferredWidth: Kirigami.Units.iconSizes.small
-            Layout.preferredHeight: Kirigami.Units.iconSizes.small
-        }
+        onClicked: root.expanded = !root.expanded
 
-        PC3.Label {
-            text: formatTime(root.summaryData.total_seconds)
-            verticalAlignment: Text.AlignVCenter
+        RowLayout {
+            id: compactLayout
+            anchors.fill: parent
+            spacing: Kirigami.Units.smallSpacing
+
+            Kirigami.Icon {
+                source: "d-tracker"
+                Layout.preferredWidth: Kirigami.Units.iconSizes.small
+                Layout.preferredHeight: Kirigami.Units.iconSizes.small
+            }
+
+            PC3.Label {
+                text: formatTime(root.summaryData.total_seconds)
+                verticalAlignment: Text.AlignVCenter
+            }
         }
     }
 
@@ -178,6 +192,8 @@ PlasmoidItem {
     //  Full Representation
     // ------------------------------------
     fullRepresentation: ColumnLayout {
+        implicitWidth: Kirigami.Units.gridUnit * 24
+        implicitHeight: Kirigami.Units.gridUnit * 28
         Layout.minimumWidth: Kirigami.Units.gridUnit * 20
         Layout.minimumHeight: Kirigami.Units.gridUnit * 24
         spacing: Kirigami.Units.largeSpacing
