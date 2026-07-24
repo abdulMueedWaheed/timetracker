@@ -84,5 +84,18 @@ def getStatsRange(start_dt: datetime, end_dt: datetime) -> dict[str, object]:
     return {"total_seconds": int(sum(stats.values())), "items": items}
 
 
+def deleteOldRecords() -> None:
+    initDB()
+    with sqlite3.connect(DB_PATH) as conn:
+        conn.execute(
+            """
+            DELETE FROM activity_log
+            WHERE timestamp < strftime('%s', 'now', '-7 days', 'start of day');
+            """
+        )
+        conn.commit()
+
 if __name__ == "__main__":
     print("db.py ready")
+    
+    deleteOldRecords()

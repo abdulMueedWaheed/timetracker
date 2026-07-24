@@ -9,7 +9,7 @@ import subprocess
 import time
 from datetime import datetime, timedelta
 
-from db import logEvent, getStatsRange, initDB
+from db import logEvent, getStatsRange, initDB, deleteOldRecords
 from env import SCRIPT_PATH, SCRIPT_NAME, BUS_NAME, OBJECT_PATH, INTERFACE_NAME
 
 last_app: str = ""
@@ -145,6 +145,7 @@ def get_stats_json(start_date: str, end_date: str) -> str:
 
 def main() -> None:
     initDB()
+    deleteOldRecords()
 
     session_bus = MessageBus(bus_type=BusType.SESSION).connect_sync()
     session_bus.request_name_sync(BUS_NAME)

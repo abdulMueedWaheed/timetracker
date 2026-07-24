@@ -1,31 +1,71 @@
 #!/bin/bash
 
-# Exit on error
-set -e
-
-# Get the directory of this script (project root)
-SCRIPT_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" &> /dev/null && pwd )"
-SERVICE_PATH="${SCRIPT_DIR}/package/tracker/service.py"
+set -euo pipefail
 
 echo "=== Time Tracker Installer ==="
 
-# 1. Make the service executable
-echo "Making service.py executable..."
-chmod +x "$SERVICE_PATH"
+CURRENT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
-# 2. Set up the systemd user service
+PLASMOID_ID="com.github.abdulMueedWaheed.timetracker"
+
+PACKAGE_DIR="${CURRENT_DIR}/package"
+TRACKER_SOURCE="${CURRENT_DIR}/tracker"
+
+PLASMA_DIR="${HOME}/.local/share/plasma/plasmoids"
+INSTALL_TRACKER_DIR="${HOME}/.local/share/timetracker/app"
 USER_SYSTEMD_DIR="${HOME}/.config/systemd/user"
+
+mkdir -p "$PLASMA_DIR"
+mkdir -p "$INSTALL_TRACKER_DIR"
 mkdir -p "$USER_SYSTEMD_DIR"
 
-echo "Creating systemd user service file at: ${USER_SYSTEMD_DIR}/timetracker.service"
-cat <<EOF > "${USER_SYSTEMD_DIR}/timetracker.service"
+###############################################################################
+# Install / Upgrade Plasma Widget
+###############################################################################
+
+if command -v kpackagetool6 >/dev/null 2>&1; then
+    KPACKAGE_TOOL="kpackagetool6"
+elif command -v kpackagetool5 >/dev/null 2>&1; then
+    KPACKAGE_TOOL="kpackagetool5"
+else
+    echo "Neither kpackagetool6 nor kpackagetool5 was found."
+    exit 1
+fi
+
+echo "Installing Plasma widget..."
+
+if $KPACKAGE_TOOL --type Plasma/Applet --list | grep -q "$PLASMOID_ID"; then
+    $KPACKAGE_TOOL --type Plasma/Applet --upgrade "$PACKAGE_DIR"
+else
+    $KPACKAGE_TOOL --type Plasma/Applet --install "$PACKAGE_DIR"
+fi
+
+###############################################################################
+# Install Tracker
+###############################################################################
+
+echo "Installing tracker..."
+
+rm -rf "$INSTALL_TRACKER_DIR"
+cp -r "$TRACKER_SOURCE" "$INSTALL_TRACKER_DIR"
+
+SERVICE_PATH="${INSTALL_TRACKER_DIR}/service.py"
+chmod +x "$SERVICE_PATH"
+
+###############################################################################
+# Install systemd service
+###############################################################################
+
+SERVICE_FILE="${USER_SYSTEMD_DIR}/timetracker.service"
+
+cat > "$SERVICE_FILE" <<EOF
 [Unit]
 Description=Desktop Time Tracker Service
 After=graphical-session.target
 
 [Service]
 Type=simple
-WorkingDirectory=${SCRIPT_DIR}/package/tracker
+WorkingDirectory=${INSTALL_TRACKER_DIR}
 ExecStart=${SERVICE_PATH}
 Restart=on-failure
 RestartSec=3
@@ -34,46 +74,22 @@ RestartSec=3
 WantedBy=default.target
 EOF
 
-# 3. Reload systemd user manager, enable, and start the service
-echo "Reloading systemd user daemon..."
+###############################################################################
+# Enable service
+###############################################################################
+
 systemctl --user daemon-reload
+systemctl --user enable --now timetracker.service
 
-echo "Enabling and starting timetracker.service..."
-systemctl --user enable timetracker.service
-systemctl --user restart timetracker.service
-
-echo "Systemd service installed and started successfully."
-echo "You can check its status using: systemctl --user status timetracker.service"
-
-# 4. Install the KDE Plasma widget
-PLASMOID_ID="com.github.abdulMueedWhaeed.timetracker"
-
-# Ensure local plasma directory structure exists
-mkdir -p "${HOME}/.local/share/plasma/plasmoids"
-
-if command -v kpackagetool6 &> /dev/null; then
-    echo "KDE Plasma 6 detected (kpackagetool6). Installing widget..."
-    # Check if already installed
-    if kpackagetool6 --type Plasma/Applet --list | grep -q "$PLASMOID_ID"; then
-        echo "Widget is already installed. Upgrading..."
-        kpackagetool6 --type Plasma/Applet --upgrade "${SCRIPT_DIR}/package"
-    else
-        echo "Installing widget..."
-        kpackagetool6 --type Plasma/Applet --install "${SCRIPT_DIR}/package"
-    fi
-elif command -v kpackagetool5 &> /dev/null; then
-    echo "KDE Plasma 5 detected (kpackagetool5). Installing widget..."
-    if kpackagetool5 --type Plasma/Applet --list | grep -q "$PLASMOID_ID"; then
-        echo "Widget is already installed. Upgrading..."
-        kpackagetool5 --type Plasma/Applet --upgrade "${SCRIPT_DIR}/package"
-    else
-        echo "Installing widget..."
-        kpackagetool5 --type Plasma/Applet --install "${SCRIPT_DIR}/package"
-    fi
-else
-    echo "Neither kpackagetool6 nor kpackagetool5 found."
-    echo "You can install it manually by symlinking the package directory:"
-    echo "ln -sfn \"\${SCRIPT_DIR}/package\" \"\${HOME}/.local/share/plasma/plasmoids/\${PLASMOID_ID}\""
-fi
-
-echo "=== Installation Completed Successfully ==="
+echo
+echo "========================================"
+echo "Time Tracker installed successfully!"
+echo "========================================"
+echo
+echo "Widget ID : $PLASMOID_ID"
+echo "Tracker   : $INSTALL_TRACKER_DIR"
+echo "Service   : timetracker.service"
+echo
+echo "Useful commands:"
+echo "  systemctl --user status timetracker.service"
+echo "  journalctl --user -u timetracker.service -f"
