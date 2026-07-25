@@ -43,7 +43,10 @@ PlasmoidItem {
     }
 
     function getISODate(date) {
-        return date.toISOString().split('T')[0];
+        var y = date.getFullYear();
+        var m = String(date.getMonth() + 1).padStart(2, "0");
+        var d = String(date.getDate()).padStart(2, "0");
+        return y + "-" + m + "-" + d;
     }
 
     function chartColor(index) {
@@ -134,7 +137,10 @@ PlasmoidItem {
         interval: 10 * 1000
         running: true
         repeat: true
-        onTriggered: root.loadStats(getISODate(new Date()), getISODate(new Date()))
+        onTriggered: {
+            console.log("[tick]", new Date().toString());
+            root.loadStats(getISODate(new Date()), getISODate(new Date()))
+        }
     }
 
     P5Support.DataSource {

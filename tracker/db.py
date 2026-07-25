@@ -46,6 +46,20 @@ def getStats(start_dt: datetime, end_dt: datetime | None = None) -> dict[str, fl
     end_ts = end_dt.strftime("%Y-%m-%d %H:%M:%S")
 
     with sqlite3.connect(DB_PATH) as conn:
+        # Whichever app was active right before the window started —
+        # needed to correctly attribute time from start_ts up to the
+        # first real event inside the window.
+        prior = conn.execute(
+            """
+            SELECT timestamp, app_class
+            FROM activity_log
+            WHERE timestamp < ?
+            ORDER BY timestamp DESC
+            LIMIT 1
+            """,
+            (start_ts,),
+        ).fetchone()
+
         rows = conn.execute(
             """
             SELECT timestamp, app_class
@@ -56,22 +70,23 @@ def getStats(start_dt: datetime, end_dt: datetime | None = None) -> dict[str, fl
             (start_ts, end_ts),
         ).fetchall()
 
+    if prior is not None:
+        rows = [(start_ts, prior[1])] + list(rows)
+
     totals: dict[str, float] = {}
 
     for index in range(len(rows) - 1):
         current_time, app = rows[index]
         next_time, _ = rows[index + 1]
-
         current_dt = datetime.fromisoformat(current_time)
         next_dt = datetime.fromisoformat(next_time)
-
         duration = (next_dt - current_dt).total_seconds()
         totals[app] = totals.get(app, 0) + duration
 
     if rows:
         current_time, app = rows[-1]
         current_dt = datetime.fromisoformat(current_time)
-        duration = (datetime.now() - current_dt).total_seconds()
+        duration = (min(datetime.now(), end_dt) - current_dt).total_seconds()
         totals[app] = totals.get(app, 0) + duration
 
     ignored_apps = {"System", "org.kde.plasmashell", "plasmashell", "kwin_wayland"}
