@@ -44,7 +44,8 @@ Item {
                 opacity: rowMouse.containsMouse ? 0.08 : 0
                 Behavior on opacity {
                     NumberAnimation {
-                        duration: Kirigami.Units.shortDuration
+                        duration: Kirigami.Units.longDuration + 200
+                        easing.type: Easing.OutCubic
                     }
                 }
             }
@@ -109,7 +110,7 @@ Item {
 
                         Behavior on width {
                             NumberAnimation {
-                                duration: Kirigami.Units.longDuration
+                                duration: Kirigami.Units.longDuration + 200
                                 easing.type: Easing.OutCubic
                             }
                         }

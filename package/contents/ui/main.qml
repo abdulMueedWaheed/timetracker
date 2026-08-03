@@ -19,19 +19,28 @@ PlasmoidItem {
         "total_seconds": 0,
         "items": []
     })
-    property var chartItems: buildChartItems(summaryData)
+
     property var allItems: buildAllItems(summaryData)
+    property var chartItems: buildChartItems(allItems, summaryData)
     property bool loading: true
 
 
+    property var filterOptions: buildFilterOptions()
+    property int selectedIndex: 0
+
+
+    // ------------------------------------
+    //  Helper functions
+    // ------------------------------------
+
+    // Data Loading
     function loadStats(startDate, endDate) {
         var command = "qdbus com.custom.TimeTracker /com/custom/TimeTracker " + "com.custom.TimeTracker.GetStatsForRange " + startDate + " " + endDate;
         dataSource.connectSource(command);
     }
 
-    // ------------------------------------
-    //  Helper functions
-    // ------------------------------------
+    
+    // Date and Time Functions
     function formatTime(time) {
         if (!time || time <= 0)
             return "0m";
@@ -49,6 +58,55 @@ PlasmoidItem {
         return y + "-" + m + "-" + d;
     }
 
+    function dateForOffset(offset) {
+        var d = new Date();
+        d.setDate(d.getDate() - offset);
+        return d;
+    }
+
+    function formatShortDate(date) {
+        // e.g. "Jul 27" — locale-aware, no manual month-name arrays
+        return Qt.locale().toString(date, "MMM d");
+    }
+
+
+    // Filtering Data
+    function buildFilterOptions() {
+        var opts = [];
+
+        opts.push({ type: "day", offset: 0, label: "Today" });
+        opts.push({ type: "day", offset: 1, label: "Yesterday" });
+
+        // Day 2 through 6: show the actual date
+        for (var i = 2; i <= 6; i++) {
+            opts.push({ type: "day", offset: i, label: formatShortDate(dateForOffset(i)) });
+        }
+
+        opts.push({ type: "range", days: 3, label: "Last 3 days" });
+        opts.push({ type: "range", days: 7, label: "Last week" });
+
+        return opts;
+    }
+
+    function applyFilter(index) {
+        var opt = root.filterOptions[index];
+        var endDate = new Date();
+        var startDate;
+
+        if (opt.type === "day") {
+            startDate = dateForOffset(opt.offset);
+            endDate = startDate;
+        } 
+        
+        else {
+            startDate = new Date();
+            startDate.setDate(startDate.getDate() - (opt.days - 1)); // inclusive of today
+        }
+
+        root.loadStats(getISODate(startDate), getISODate(endDate));
+    }
+
+    // Get colors for UI elements
     function chartColor(index) {
         var colors = [Kirigami.Theme.highlightColor, Kirigami.Theme.positiveTextColor, Kirigami.Theme.neutralTextColor, Kirigami.Theme.negativeTextColor, Kirigami.Theme.linkColor, Kirigami.Theme.visitedLinkColor, Kirigami.Theme.activeTextColor, Kirigami.Theme.textColor];
         return colors[index % colors.length];
@@ -72,10 +130,11 @@ PlasmoidItem {
             return root.chartColor(othersIndex);
         }
 
-        // Fallback: no "Others" slice exists (e.g. very few apps today, nothing got grouped)
         return Kirigami.Theme.textColor;
     }
 
+
+    // Building Array of Items for representing the data
     function buildAllItems(summary) {
         var items = (summary && summary.items) ? summary.items.slice() : [];
         items.sort(function(a, b) {
@@ -84,33 +143,33 @@ PlasmoidItem {
         return items;
     }
 
-    function buildChartItems(summary) {
-        var items = (summary && summary.items) ? summary.items.slice() : [];
-        if (items.length === 0)
-            return [];
-
-        items.sort(function(a, b) {
-            return b.seconds - a.seconds;
-        });
+    function buildChartItems(allItems, summary) {
+        
         var total = summary.total_seconds || 0;
+        
         if (total <= 0) {
-            for (var i = 0; i < items.length; i++) {
-                total += items[i].seconds;
+            for (var i = 0; i < allItems.length; i++) {
+                total += allItems[i].seconds;
             }
         }
+        
         var target = total * 0.9;
         var accumulated = 0;
         var result = [];
         var othersSeconds = 0;
-        for (var j = 0; j < items.length; j++) {
-            var item = items[j];
+        for (var j = 0; j < allItems.length; j++) {
+            var item = allItems[j];
+            
             if (accumulated < target) {
                 result.push(item);
                 accumulated += item.seconds;
-            } else {
+            } 
+            
+            else {
                 othersSeconds += item.seconds;
             }
         }
+
         if (othersSeconds > 0)
             result.push({
                 "app": "Others",
@@ -120,29 +179,32 @@ PlasmoidItem {
         return result;
     }
 
+
     // ------------------------------------
     //  On completed
     // ------------------------------------
     Component.onCompleted: root.loadStats(getISODate(new Date()), getISODate(new Date()))
     onSummaryDataChanged: {
-        chartItems = buildChartItems(summaryData);
         allItems = buildAllItems(summaryData);
+        chartItems = buildChartItems(allItems, summaryData);
         loading = false;
     }
+
 
     // ------------------------------------
     //  Timer and Data Loader
     // ------------------------------------
     Timer {
         interval: 10 * 1000
-        running: true
+        running: root.filterOptions[root.selectedIndex].offset === 0
         repeat: true
+        
         onTriggered: {
-            console.log("[tick]", new Date().toString());
             root.loadStats(getISODate(new Date()), getISODate(new Date()))
         }
     }
 
+    
     P5Support.DataSource {
         id: dataSource
 
@@ -155,7 +217,9 @@ PlasmoidItem {
 
             try {
                 root.summaryData = JSON.parse(out);
-            } catch (e) {
+            } 
+            
+            catch (e) {
                 console.error("Error parsing stats:", e, out);
             }
         }
@@ -220,6 +284,20 @@ PlasmoidItem {
                 Layout.preferredWidth: Kirigami.Units.iconSizes.small
                 Layout.preferredHeight: Kirigami.Units.iconSizes.small
             }
+
+            PC3.ComboBox {
+                id: filterCombo
+                Layout.fillWidth: true
+
+                model: root.filterOptions
+                textRole: "label"
+
+                currentIndex: root.selectedIndex
+                onActivated: function(index) {
+                    root.selectedIndex = index;
+                    root.applyFilter(index);
+                }
+            }
         }
 
         Item {
@@ -265,6 +343,7 @@ PlasmoidItem {
                 Behavior on opacity {
                     NumberAnimation {
                         duration: Kirigami.Units.longDuration
+                        easing.type: Easing.OutCubic
                     }
                 }
 
@@ -296,7 +375,7 @@ PlasmoidItem {
 
                 PC3.Label {
                     Layout.alignment: Qt.AlignHCenter
-                    text: "today"
+                    text: root.filterOptions[root.selectedIndex].label.toLowerCase()
                     opacity: 0.6
                     font.pixelSize: Kirigami.Units.gridUnit * 0.7
                 }
