@@ -33,6 +33,7 @@ The compact Representation looks like this (in the panel): ![alt text](ss/compac
 
 Full Representation (on desktop or on panel when clicked): ![alt text](ss/fullRepresentation.png)
 
-Filtering (click on top right corner): ![alt text](ss/filtering.png)
+Filtering (click on top right corner): 
+![alt text](ss/filtering.png)
 
 Hope you enjoy.
